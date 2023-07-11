@@ -1,13 +1,6 @@
-import os
-import os.path as path
-import pathlib
-import numpy as np
-import cv2
-import matplotlib.pyplot as plt
+import sys
 import tensorflow as tf
-
-from tensorflow import keras
-from keras import preprocessing
+import numpy as np
 
 class Dataset(object):
     """A class used to create and use a dataset of satellite imagery
@@ -117,7 +110,7 @@ class Dataset(object):
             mask = self.get_cloud_mask_from_file(mask_path.decode())
         else:
             img = np.zeros((self.patch_width, self.patch_height, len(self.bands)), dtype=np.float32)
-            mask = np.zeros((self.patch_width, self.patch_height), dtype=np.float32)
+            mask = np.zeros((self.patch_width, self.patch_height, self.num_cls), dtype=np.float32)
         return img, mask
 
     def get_spectral_bands_from_file(self, file):
@@ -148,7 +141,6 @@ class Dataset(object):
         cloudy[cloud_cond] = 1
         mask[:, :, 0] = clear
         mask[:, :, 1] = cloudy
-        # self.show_patch(mask, 'binary')
         return mask
 
     def normalize_data(self, img, mask):
@@ -160,7 +152,7 @@ class Dataset(object):
         """
         return (img / 255.), mask
 
-    def train_test_split(self, test_split=0.1, val_split=0.05):
+    def train_val_split(self, val_split=0.05):
         """Split the dataset into train_ds and test_ds for given splitting
 
         Parameter:
@@ -168,16 +160,16 @@ class Dataset(object):
         test_size: Split ratio for test_ds --> train_ds size automatically
         """
         num_samples = int(self.dataset.__len__())
-        train_val_size = int((1 - test_split) * num_samples)
-        train_size = int(train_val_size * (1 - val_split))
-        val_size = train_val_size - train_size
-        test_size = num_samples - train_val_size
+        if num_samples > 10000:
+            train_size = num_samples - 500
+        else:
+            train_size = int(num_samples * (1 - val_split))
+        val_size = num_samples - train_size
 
         train_ds = self.dataset.take(train_size)
         val_ds = self.dataset.skip(train_size).take(val_size)
-        test_ds = self.dataset.skip(train_size+val_size).take(test_size)
 
-        return train_ds, val_ds, test_ds
+        return train_ds, val_ds
 
     def define_tf_shape(self, img, mask):
         """Define the shape of tensors cause of separation from tensorflow graph build by using tf.numpy_function"""
@@ -185,18 +177,8 @@ class Dataset(object):
         mask.set_shape([self.patch_width, self.patch_height, self.num_cls])
         return img, mask
 
-    def show_patch(self, patch, color_map): #gray/binary
-        """Show an image patch with matplotlib using gray/binary colormap
-
-        Parameter
-        patch: image patch to be shown
-        color_map: pixel value mode --> gray 0-255, binary 0-1
-        """
-        plt.imshow(patch, cmap=color_map)
-        plt.show()
-
     def cloud_amount(self):
-        """ Calculate the portion of clouds im the dataset rounded to two digits after the comma."""
+        """ Calculate the portion of clouds in the dataset rounded to two digits after the comma."""
         _, counts = np.unique(self.train_masks, return_counts=True)
         cloud_rate = counts[1] / sum(counts)
         cloud_rate = round(cloud_rate * 10000) / 100
@@ -208,3 +190,13 @@ if __name__ == '__main__':
     dataset = Dataset('ccava', BANDS, 2, 256, 256, 'D:/Clouds/data/LandSat8/CCAVA_Small')
     dataset.create_dataset()
     print(str(int(dataset.dataset.__len__())) + " samples in the dataset")
+
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import tifffile as tiff
+
+    img = tiff.imread(
+        'E:/MA-Clouds/Praxis/cloudy_data/LandSat8/38-Cloud-Data/38-Cloud_training/train_gt/gt_patch_69_4_by_6_LC08_L1TP_032029_20160420_20170223_01_T1.tif')
+    img_array = np.array(img)
+    print(img_array.shape)
+    plt.imshow(img)
