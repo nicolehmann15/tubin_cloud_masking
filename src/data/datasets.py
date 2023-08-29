@@ -1,6 +1,10 @@
 import sys
 import tensorflow as tf
 import numpy as np
+import random
+
+from .cleaning import filter_cloudless
+from .transformation import augmentate, compare, smoothing, sharpening
 
 class Dataset(object):
     """A class used to create and use a dataset of satellite imagery
@@ -36,8 +40,8 @@ class Dataset(object):
         if dataset_name == '38-95-Cloud-Data':
             print('38-95')
             data_format = 'tif'
-        elif dataset_name == 'ccava':
-            print('ccava')
+        elif dataset_name == 'biome':
+            print('biome')
             self.num_satellite_bands = 12
             self.get_ccava_data()
         elif dataset_name == 'sparcs':
@@ -63,16 +67,30 @@ class Dataset(object):
         print('Listing all files...')
         images_ds = self.list_images()
         print('Listing done!\n')
+
         tuple_ds = images_ds.map(self.link_masks)
         print('Masks linked to images\n')
-        print('Processing and filtering the data...')
+
+        print('Processing the data...')
         train_ds = tuple_ds.map(lambda img, mask: tf.numpy_function(self.process_npy_data, [img, mask], [tf.float32, tf.float32]))
-        print('Processing done!\n')
         train_ds = train_ds.map(self.define_tf_shape)
-        if self.dataset_name != 'ccava':
+        print('Processing done!\n')
+
+        if self.dataset_name != 'biome':
             print('Normalize patches...')
             train_ds = train_ds.map(self.normalize_data)
             print('Normalization done!\n')
+
+        # print(int(train_ds.__len__()))
+        # print('Cleaning the data...')
+        # train_ds = train_ds.filter(lambda img, mask: tf.numpy_function(filter_cloudless, [img, mask], tf.bool))
+        # print('Cleaning done!\n')
+        # print(int(train_ds.__len__()))
+
+        #for img, mask in train_ds.take(3):
+        #    aug, mask = augmentate(img, mask)
+        #    compare(img, aug)
+
         for img, mask in train_ds.take(1):
             print('***Image: ', img.shape)
             print('***Mask: ', mask.shape)
@@ -80,7 +98,7 @@ class Dataset(object):
 
     def list_images(self):
         """List all image paths for dataset specific conditions"""
-        if self.dataset_name == 'ccava':
+        if self.dataset_name == 'biome':
             images_ds = tf.data.Dataset.list_files(self.home_path + '/*/*/*/image.npy', shuffle=True)
         else:
             images_ds = tf.data.Dataset()
@@ -92,7 +110,7 @@ class Dataset(object):
         Parameter:
         img_path: Path to image patch
         """
-        if self.dataset_name == 'ccava':
+        if self.dataset_name == 'biome':
             mask_path = tf.strings.regex_replace(img_path, 'image.npy', 'mask.npy')
         else:
             mask_path = ''
@@ -105,7 +123,7 @@ class Dataset(object):
         img_path: Path to image_patch npy-file
         mask_path: Path to cloud mask npy-file
         """
-        if self.dataset_name == 'ccava':
+        if self.dataset_name == 'biome':
             img = self.get_spectral_bands_from_file(img_path.decode())
             mask = self.get_cloud_mask_from_file(mask_path.decode())
         else:
@@ -132,11 +150,12 @@ class Dataset(object):
         file: npy-file containing filter masks of image patch
         """
         load_masks = np.load(file, allow_pickle=True)
+        width, height, _ = load_masks.shape
         # 3 = thin clouds | 4 = thick clouds
         cloud_cond = np.where((load_masks[:, :, 3] == 1) | (load_masks[:, :, 4] == 1))
-        mask = np.zeros((self.patch_width, self.patch_height, self.num_cls), dtype=np.float32)
-        cloudy = np.zeros((self.patch_width, self.patch_height), dtype=np.float32)
-        clear = np.ones((self.patch_width, self.patch_height), dtype=np.float32)
+        mask = np.zeros((width, height, self.num_cls), dtype=np.float32)
+        cloudy = np.zeros((width, height), dtype=np.float32)
+        clear = np.ones((width, height), dtype=np.float32)
         clear[cloud_cond] = 0
         cloudy[cloud_cond] = 1
         mask[:, :, 0] = clear
@@ -187,7 +206,7 @@ class Dataset(object):
 
 if __name__ == '__main__':
     BANDS = [3, 2, 1, 11]
-    dataset = Dataset('ccava', BANDS, 2, 256, 256, 'D:/Clouds/data/LandSat8/CCAVA_Small')
+    dataset = Dataset('biome', BANDS, 2, 256, 256, 'D:/Clouds/data/LandSat8/Biome_Small')
     dataset.create_dataset()
     print(str(int(dataset.dataset.__len__())) + " samples in the dataset")
 

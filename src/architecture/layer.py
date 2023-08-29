@@ -49,8 +49,7 @@ class Layers(object):
         input: Input Tensor from previous layer
         """
         return Conv2D(num_filters, (3, 3), activation=self.activation, padding='same',
-                      kernel_initializer='glorot_uniform', kernel_regularizer=self.kernel_regularizer)(input)
-                        # he_normal
+                      kernel_initializer='he_uniform', kernel_regularizer=self.kernel_regularizer)(input)
 
     def batch_norm_layer(self, input):
         """Create a batch normalization layer to regularize the data

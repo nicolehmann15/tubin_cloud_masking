@@ -12,7 +12,7 @@ import cv2
 from keras.callbacks import ModelCheckpoint, EarlyStopping, CSVLogger, TensorBoard, ReduceLROnPlateau, LearningRateScheduler
 
 from . import UNet
-from .modelParameter import get_optimizer, get_loss, f1_score, mIoU, exp_decay
+from .hyperParameter import get_optimizer, get_loss, f1_score, mIoU, exp_decay
 from .utils import fuse_one_hot
 
 BANDS = [3, 2, 1, 11]
@@ -36,8 +36,8 @@ class CloudSegmentation(object):
         self.num_cls = num_cls
 
         params = {
-            'patch_height': 256,
-            'patch_width': 256,
+            'patch_height': self.dataset.patch_height,
+            'patch_width': self.dataset.patch_width,
             'activation': 'relu',
             'L2reg': 0.1,
             'batch_norm_momentum': 0.99,
@@ -69,7 +69,7 @@ class CloudSegmentation(object):
         """
         optimizer = get_optimizer(opt, lr)
         loss_func = get_loss(loss)
-        self.model.compile(loss=loss_func, metrics=metrics, optimizer=optimizer)
+        self.model.compile(loss=loss, metrics=metrics, optimizer=optimizer)
         self.model.summary()
 
     def train(self, save_path, extension, num_epochs, train_ds, val_ds):
@@ -82,12 +82,11 @@ class CloudSegmentation(object):
         train_ds: training dataset
         val_split: portion of dataset that is used for validation
         """
-        check_path = './../models/checkpoints/strongest-weights-' + extension + '-.hdf5' # weights-improvement-epoch-{epoch:02d}
-        patience = 4
+        check_path = './../models/checkpoints/strongest-weights-' + extension + '-.hdf5'
         checkpoint_cb = ModelCheckpoint(check_path, monitor='val_f1_score', verbose=1, mode='max', save_best_only=True)
-        csv_logger_cb = CSVLogger('./../reports/csv_logger' + self.satellite + '_' + extension + '.log')
-        early_stop_cb = EarlyStopping(monitor='val_f1_score', patience=patience, min_delta=0.005, verbose=1, mode='max')
-        lr_reduce_cb = ReduceLROnPlateau(monitor='val_f1_score', factor=0.4, patience=patience, min_delta=0.005, verbose=1, mode='max', min_lr=1e-6)
+        csv_logger_cb = CSVLogger('./../reports/csv_logger_' + extension + '.log')
+        early_stop_cb = EarlyStopping(monitor='val_f1_score', patience=5, min_delta=0.01, verbose=1, mode='max')
+        lr_reduce_cb = ReduceLROnPlateau(monitor='val_f1_score', factor=0.6, patience=2, min_delta=0.01, verbose=1, mode='max', min_lr=1e-6)
         lr_scheduler_cb = LearningRateScheduler(exp_decay)
         callbacks = [checkpoint_cb, csv_logger_cb, lr_reduce_cb]
         trained = self.model.fit(train_ds,
@@ -96,14 +95,14 @@ class CloudSegmentation(object):
                                  validation_data=val_ds,
                                  callbacks=callbacks)
         self.history = trained.history
-        np.save(save_path + 'history/' + self.satellite + '_' + extension + '.npy', trained.history)
-        self.model.save(save_path + 'models/' + self.satellite + '_' + extension + '.hdf5')
+        np.save(save_path + 'history/' + extension + '.npy', trained.history)
+        self.model.save(save_path + 'models/' + extension + '.hdf5')
 
     def draw_history(self):
         """Plot the attached history"""
         if self.history:
-            accuracy = np.array(self.history['binary_accuracy'])
-            val_accuracy = np.array(self.history['val_binary_accuracy'])
+            accuracy = np.array(self.history['accuracy'])
+            val_accuracy = np.array(self.history['val_accuracy'])
             loss = np.array(self.history['loss'])
             val_loss = np.array(self.history['val_loss'])
             f1score = np.array(self.history['f1_score'])
@@ -113,8 +112,8 @@ class CloudSegmentation(object):
             epochs = np.arange(1, len(accuracy) + 1)
 
             plt.subplot(2, 2, 1)
-            plt.plot(epochs, accuracy, label='training data')
-            plt.plot(epochs, val_accuracy, label='validation data')
+            plt.plot(epochs, accuracy, label='training')
+            plt.plot(epochs, val_accuracy, label='validation')
             plt.title('Mean accuracy of predictions')
             plt.ylabel('accuracy')
             plt.xlabel('epoch')
@@ -124,18 +123,18 @@ class CloudSegmentation(object):
             axes.yaxis.grid()
 
             plt.subplot(2, 2, 2)
-            plt.plot(epochs, loss, label='training data')
-            plt.plot(epochs, val_loss, label='validation data')
-            plt.title('Mean cost of predictions')
-            plt.ylabel('cost')
+            plt.plot(epochs, loss, label='training')
+            plt.plot(epochs, val_loss, label='validation')
+            plt.title('Mean loss of predictions')
+            plt.ylabel('loss')
             plt.xlabel('epoch')
             plt.legend(loc="upper right")
             axes = plt.gca()
             axes.yaxis.grid()
 
             plt.subplot(2, 2, 3)
-            plt.plot(epochs, f1score, label='training data')
-            plt.plot(epochs, val_f1score, label='validation data')
+            plt.plot(epochs, f1score, label='training')
+            plt.plot(epochs, val_f1score, label='validation')
             plt.title('F1-Score of predictions')
             plt.ylabel('f1-score')
             plt.xlabel('epoch')
@@ -145,9 +144,9 @@ class CloudSegmentation(object):
             axes.yaxis.grid()
 
             plt.subplot(2, 2, 4)
-            plt.plot(epochs, miou, label='training data')
-            plt.plot(epochs, val_miou, label='validation data')
-            plt.title('Jaccard Index of predictions')
+            plt.plot(epochs, miou, label='training')
+            plt.plot(epochs, val_miou, label='validation')
+            plt.title('Mean Intersection over Union of predictions')
             plt.ylabel('mIoU')
             plt.xlabel('epoch')
             plt.legend(loc="lower right")
