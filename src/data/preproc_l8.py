@@ -9,11 +9,11 @@ import spectral as spy
 
 from datasets import Dataset
 
-LANDSAT_PRED_PATH = 'D:/Clouds/data/test_predict'
-LANDSAT_PATH = 'D:/Clouds/data/Landsat8/Processing/buffer'
-LANDSAT_PP = 'D:/Clouds/data/Landsat8/Biome_256_pp'
-LANDSAT_PP_MD = 'D:/Clouds/data/Landsat8/Biome_256_pp_md'
-LANDSAT_FULL = 'D:/Clouds/data/Landsat8/Biome_Full'
+LANDSAT_PRED_PATH = '/data/test_predict'
+LANDSAT_PATH = 'data/Landsat8/Processing/buffer'
+LANDSAT_PP = '/data/Landsat8/Biome_256_pp'
+LANDSAT_PP_MD = '/data/Landsat8/Biome_256_pp_md'
+LANDSAT_FULL = '/data/Landsat8/Biome_Full'
 SCALE_FACTOR = 256*256 - 1
 BAND_ORDER = [3, 2, 1, 0]
 THRESH = 0.01
