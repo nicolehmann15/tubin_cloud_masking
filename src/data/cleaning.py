@@ -82,5 +82,5 @@ def cloud_amount(home_path, patch_size):
 
 
 if __name__ == '__main__':
-    cloud_amount('D:/Clouds/data/TUBIN/TUBIN_256_pp_md/train', 256)
-    #clean_biome('D:/Clouds/data/Landsat8/Processing/patched')
+    cloud_amount('/TUBIN_256_pp_md/train', 256)
+    #clean_biome('/Landsat8/Processing/patched')
