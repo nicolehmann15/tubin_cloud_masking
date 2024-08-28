@@ -12,16 +12,16 @@ from architecture.hyperParameter import f1_score, mIoU, dice_loss, mIoU_loss, ge
 if __name__ == '__main__':
     os.environ['TF_DEVICE_MIN_SYS_MEMORY_IN_MB'] = '100'
     params = get_standard_params()
-    # dataset = Dataset(params['BANDS'], params['num_cls'], params['patch_size'], params['patch_size'], 'D:/Clouds/data/Landsat8/Biome_256_pp_md/train')
-    dataset = Dataset(params['BANDS'], params['num_cls'], params['patch_size'], params['patch_size'], 'D:/Clouds/data/TUBIN/TUBIN_256_pp_md/train')
-    #dataset = Dataset([0], params['num_cls'], params['patch_size'], params['patch_size'], 'D:/Clouds/data/Sentinel-3/Creodias/train')
+    # dataset = Dataset(params['BANDS'], params['num_cls'], params['patch_size'], params['patch_size'], 'Biome_256_pp_md/train')
+    dataset = Dataset(params['BANDS'], params['num_cls'], params['patch_size'], params['patch_size'], 'TUBIN_256_pp_md/train')
+    #dataset = Dataset([0], params['num_cls'], params['patch_size'], params['patch_size'], 'Sentinel-3/Creodias/train')
     dataset.create_dataset_tf()
     num_samples = int(dataset.dataset.__len__())
     print(str(num_samples) + ' samples in the dataset\n')
     train_ds, val_ds = dataset.train_val_split(val_split=0.05)
 
     #val_ds
-    #val_dataset = Dataset(params['BANDS'], params['num_cls'], params['patch_size'], params['patch_size'], 'D:/Clouds/data/Landsat8/Biome_256_Small_pp_md/test')
+    #val_dataset = Dataset(params['BANDS'], params['num_cls'], params['patch_size'], params['patch_size'], 'Biome_256_Small_pp_md/test')
     #val_dataset.create_dataset_tf()
     #val_ds, _ = val_dataset.train_val_split(val_split=0.0)
 
