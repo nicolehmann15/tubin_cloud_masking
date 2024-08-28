@@ -1,108 +1,123 @@
-import sys
+import pathlib
+import random
+import os
+import matplotlib.pyplot as plt
 import tensorflow as tf
 import numpy as np
-import random
+import cv2
+import tifffile as tiff
+from skimage import exposure
 
-from .cleaning import filter_cloudless
-from .transformation import augmentate, compare, smoothing, sharpening
+#from transformation import augmentate
 
 class Dataset(object):
     """A class used to create and use a dataset of satellite imagery
 
     Attributes:
-    dataset_name: Name of the dataset in use
     bands: List of available spectral bands
     num_cls: Number of classes
     patch_width: Width of image patches
     patch_height: Height of image patches
-    home_path: home path to train data
-    images: Data loaded from directory
-    masks: Masks loaded from directory
+    home_path: Home path to train data
+    dataset: Preprocessed dataset
     """
 
-    def __init__(self, dataset_name, bands, num_cls, patch_width, patch_height, path):
-        self.dataset_name = dataset_name
+    def __init__(self, bands, num_cls, patch_width, patch_height, path):
         self.bands = bands
         self.num_cls = num_cls
         self.patch_width = patch_width
         self.patch_height = patch_height
         self.home_path = path
         self.dataset = None
-        self.masks = None
 
-    def create_datasets(self, dataset_name):
-        """Create the dataset of given data paths
+    def create_dataset_np(self, num_samples=1):
+        """Create a numpy dataset
 
         Parameter:
-        dataset_name: filter to load the correct data
+        num_samples: number of wanted samples to be loaded
         """
-        # Landsat8
-        if dataset_name == '38-95-Cloud-Data':
-            print('38-95')
-            data_format = 'tif'
-        elif dataset_name == 'biome':
-            print('biome')
-            self.num_satellite_bands = 12
-            self.get_ccava_data()
-        elif dataset_name == 'sparcs':
-            print('sparcs')
-            data_format = 'png'
-        # Sentinel2
-        elif dataset_name == 'cloud mask catalogue':
-            print('catalogue')
-            data_format = 'npy'
-        elif dataset_name == 'cloudsen12':
-            print('cloudsen12')
-            print('data in pkl file')
-        elif dataset_name == 's2_ccs':
-            print('s2_ccs')
-            data_format = 'tif'
-        # TUBIN
-        elif dataset_name == 'tubin':
-            print('tubin')
-            data_format = 'tif'
+        print('Collect and process data...')
+        image_ds, mask_ds = self.list_objects(num_samples)
+        print('Collecting done!')
+        #print('Augmentation started')
+        #for image, mask in list(zip(image_ds, mask_ds)):
+        #    augmentate(image, mask)
+        #    print('augmented')
 
-    def create_dataset(self):
-        """Create a dataset to be used for model training"""
-        print('Listing all files...')
-        images_ds = self.list_images()
-        print('Listing done!\n')
+        #print(image_ds[1, :, :, -1:0:-1].shape)
+        #for i in range(30):
+        #    plt.subplot(1, 2, 1)
+        #    plt.imshow(image_ds[i, :, :, :3], label='gt image')
+        #    plt.axis('off')
+        #    plt.subplot(1, 2, 2)
+        #    plt.imshow(mask_ds[i, :, :, 1], label='gt mask', cmap='gray')
+        #    plt.axis('off')
+        #    plt.show()
+        #exit()
+        self.dataset = (image_ds, mask_ds)
 
-        tuple_ds = images_ds.map(self.link_masks)
+    def create_dataset_tf(self, num_samples=1):
+        """Create a tf dataset to be used for model training
+
+        Parameter:
+        num_samples: number of wanted samples to be loaded
+        """
+        print('Collect data paths...')
+        image_ds = tf.data.Dataset.list_files(self.home_path + '/*/*/*/image.npy', shuffle=True)
+        if num_samples > 1 and num_samples < int(image_ds.__len__()):
+            print('Taken samples: ' + str(num_samples))
+            image_ds = image_ds.take(num_samples)
+        print('Collecting done!\n')
+        tuple_ds = image_ds.map(self.link_masks)
         print('Masks linked to images\n')
 
-        print('Processing the data...')
-        train_ds = tuple_ds.map(lambda img, mask: tf.numpy_function(self.process_npy_data, [img, mask], [tf.float32, tf.float32]))
-        train_ds = train_ds.map(self.define_tf_shape)
+        print('Processing and filtering the data...')
+        train_ds = tuple_ds.map(
+            lambda img, mask: tf.numpy_function(self.process_npy_data, [img, mask], [tf.float32, tf.float32]))
         print('Processing done!\n')
-
-        if self.dataset_name != 'biome':
-            print('Normalize patches...')
-            train_ds = train_ds.map(self.normalize_data)
-            print('Normalization done!\n')
-
-        # print(int(train_ds.__len__()))
-        # print('Cleaning the data...')
-        # train_ds = train_ds.filter(lambda img, mask: tf.numpy_function(filter_cloudless, [img, mask], tf.bool))
-        # print('Cleaning done!\n')
-        # print(int(train_ds.__len__()))
-
-        #for img, mask in train_ds.take(3):
-        #    aug, mask = augmentate(img, mask)
-        #    compare(img, aug)
+        train_ds = train_ds.map(self.define_tf_shape)
 
         for img, mask in train_ds.take(1):
             print('***Image: ', img.shape)
             print('***Mask: ', mask.shape)
+            #augmentate(img, mask)
         self.dataset = train_ds
 
-    def list_images(self):
-        """List all image paths for dataset specific conditions"""
-        if self.dataset_name == 'biome':
-            images_ds = tf.data.Dataset.list_files(self.home_path + '/*/*/*/image.npy', shuffle=True)
-        else:
-            images_ds = tf.data.Dataset()
-        return images_ds
+    def list_objects(self, num_samples):
+        """List all image paths for dataset specific conditions
+
+        Parameter:
+        num_samples: Number of samples to be loaded
+        """
+        image_ds, mask_ds = self.list_files()
+        order = list(range(len(image_ds)))
+        random.shuffle(order)
+        order = np.array(order)
+        if order.shape[0] > num_samples and num_samples != 1:
+            order = order[:num_samples]
+        image_ds = list(np.array(image_ds)[order])
+        mask_ds = list(np.array(mask_ds)[order])
+        return self.get_array_ds(image_ds, mask_ds)
+
+    def list_files(self):
+        """List all npy-prepared image paths"""
+        image_ds = list(pathlib.Path(self.home_path).rglob('*image.npy'))
+        mask_ds = list(pathlib.Path(self.home_path).rglob('*mask.npy'))
+        return image_ds, mask_ds
+
+    def load_data_from_file(self, files):
+        """Load all data from given file_names
+
+        Parameter:
+        files: npy-file_list containing data of each patch
+        """
+        images = []
+        for img_path in files: #pathlib.Path(self.home_path).rglob('*image.npy'):
+            load_bands = np.load(img_path, allow_pickle=True)
+            images.append(load_bands)
+            del load_bands
+        image_ds = np.array(images).astype(np.float32)
+        return image_ds
 
     def link_masks(self, img_path):
         """Attach mask-path to corresponding image-path
@@ -110,10 +125,7 @@ class Dataset(object):
         Parameter:
         img_path: Path to image patch
         """
-        if self.dataset_name == 'biome':
-            mask_path = tf.strings.regex_replace(img_path, 'image.npy', 'mask.npy')
-        else:
-            mask_path = ''
+        mask_path = tf.strings.regex_replace(img_path, 'image.npy', 'mask.npy')
         return img_path, mask_path
 
     def process_npy_data(self, img_path, mask_path):
@@ -123,12 +135,8 @@ class Dataset(object):
         img_path: Path to image_patch npy-file
         mask_path: Path to cloud mask npy-file
         """
-        if self.dataset_name == 'biome':
-            img = self.get_spectral_bands_from_file(img_path.decode())
-            mask = self.get_cloud_mask_from_file(mask_path.decode())
-        else:
-            img = np.zeros((self.patch_width, self.patch_height, len(self.bands)), dtype=np.float32)
-            mask = np.zeros((self.patch_width, self.patch_height, self.num_cls), dtype=np.float32)
+        img = self.get_spectral_bands_from_file(img_path.decode())
+        mask = self.get_cloud_mask_from_file(mask_path.decode())
         return img, mask
 
     def get_spectral_bands_from_file(self, file):
@@ -137,11 +145,13 @@ class Dataset(object):
         Parameter:
         file: npy-file containing spectral bands of image patch
         """
-        load_bands = np.load(file, allow_pickle=True)
-        combination = np.zeros((self.patch_width, self.patch_height, len(self.bands)), dtype=np.float32)
-        for order, band in enumerate(self.bands):
-            combination[:, :, order] = load_bands[:, :, band-1]
-        return combination
+        bands = np.load(file, allow_pickle=True)
+        #bands = bands[:, :, 2::-1]
+        if len(bands.shape) == 2:
+            bands = np.expand_dims(bands, 2)
+        elif len(bands.shape) == 3:
+            bands = bands[:, :, np.array(self.bands)]
+        return bands.astype(np.float32)
 
     def get_cloud_mask_from_file(self, file):
         """Extract all cloud labeled pixel from mask filters and combine them in one mask
@@ -150,17 +160,48 @@ class Dataset(object):
         file: npy-file containing filter masks of image patch
         """
         load_masks = np.load(file, allow_pickle=True)
-        width, height, _ = load_masks.shape
-        # 3 = thin clouds | 4 = thick clouds
-        cloud_cond = np.where((load_masks[:, :, 3] == 1) | (load_masks[:, :, 4] == 1))
-        mask = np.zeros((width, height, self.num_cls), dtype=np.float32)
-        cloudy = np.zeros((width, height), dtype=np.float32)
-        clear = np.ones((width, height), dtype=np.float32)
-        clear[cloud_cond] = 0
-        cloudy[cloud_cond] = 1
-        mask[:, :, 0] = clear
-        mask[:, :, 1] = cloudy
-        return mask
+        # S3: already prepared mask
+        if len(load_masks.shape) == 2:
+            stacked_masks = np.stack((np.logical_not(load_masks).astype(np.float32), load_masks), axis=2).astype(np.float32)
+        # L8: 3 = thin clouds | 4 = thick clouds
+        elif load_masks.shape[2] == 1:
+            stacked_masks = np.stack((np.logical_not(load_masks[:, :, 0]).astype(np.float32), load_masks[:, :, 0]), axis=2).astype(np.float32)
+        else:
+            stacked_masks = np.stack((np.logical_or(np.logical_or(load_masks[:, :, 1] == 1.0, load_masks[:, :, 2] == 1.0), load_masks[:, :, 0] == 1.0).astype(np.float32),
+                np.logical_or(load_masks[:, :, 3] == 1.0, load_masks[:, :, 4] == 1.0).astype(np.float32)), axis=2).astype(np.float32)
+        return stacked_masks
+
+    def reduce_masks(self, ds):
+        """Redruce L8 masks to cloudy and clear
+
+        Parameter:
+        ds: Ground truth dataset
+        """
+        if len(self.bands) == 1:
+            return np.stack((np.logical_not(ds).astype(np.float32), ds), axis=3)
+        elif ds.shape[3] == 1:
+            return np.stack((np.logical_not(ds).astype(np.float32), ds), axis=3).astype(np.float32)
+        else:
+            # 0 = filler | 1 = shadow | 2 = clear | 3 = thin clouds | 4 = thick clouds
+            return np.stack((np.logical_or(np.logical_or(ds[:, :, :, 1] == 1.0, ds[:, :, :, 2] == 1.0), ds[:, :, :, 0] == 1.0).astype(np.float32),
+                             np.logical_or(ds[:, :, :, 3] == 1.0, ds[:, :, :, 4] == 1.0).astype(np.float32)), axis=3)
+
+    def get_array_ds(self, image_ds, mask_ds):
+        """Load and process images and masks out of their files
+
+        Parameter:
+        image_ds: Image path list
+        mask_ds: Mask path list
+        """
+        image_files = image_ds
+        mask_files = mask_ds
+        if len(self.bands) > 1:
+            image_ds = self.load_data_from_file(image_files)
+            mask_ds = self.reduce_masks(self.load_data_from_file(mask_files))
+        else:
+            image_ds = self.load_data_from_file(image_files).astype(np.float32)
+            mask_ds = self.reduce_masks(self.load_data_from_file(mask_files)).astype(np.float32)
+        return image_ds, mask_ds
 
     def normalize_data(self, img, mask):
         """Normalize the image data
@@ -171,51 +212,92 @@ class Dataset(object):
         """
         return (img / 255.), mask
 
-    def train_val_split(self, val_split=0.05):
-        """Split the dataset into train_ds and test_ds for given splitting
+    def train_val_split(self, val_split=0.05, sample_size=1):
+        """Split the dataset into train_ds and test_ds for given splitting and sample_size
 
         Parameter:
-        bands: Spectral bands to be used
-        test_size: Split ratio for test_ds --> train_ds size automatically
+        val_split: Split ratio for val_ds --> train_ds size automatically
+        sample_size: Dataset size constraint
         """
         num_samples = int(self.dataset.__len__())
+        if sample_size > 1 and sample_size < num_samples:
+            num_samples = sample_size
+        elif sample_size != 1:
+            print('Sample size constraint is too high')
+            exit()
         if num_samples > 10000:
-            train_size = num_samples - 500
+            train_size = num_samples - 1000
         else:
             train_size = int(num_samples * (1 - val_split))
         val_size = num_samples - train_size
 
         train_ds = self.dataset.take(train_size)
         val_ds = self.dataset.skip(train_size).take(val_size)
-
+        #train_ds = (self.dataset[0][:train_size], self.dataset[1][:train_size])
+        #val_ds = (self.dataset[0][train_size:], self.dataset[1][train_size:])
         return train_ds, val_ds
 
+    def get_shape(self):
+        """Print the shape of the extracted data"""
+        print('***Image Shape***: ',
+              np.load(self.dataset[0][0], allow_pickle=True)[:, :, np.array(self.spec_bands)-1].shape)
+        mask = np.load(self.dataset[1][0], allow_pickle=True)
+        print('***Mask Shape***: ',
+            np.stack((np.logical_or(np.logical_or(mask[:, :, :, 1] == 1.0, mask[:, :, :, 2] == 1.0), mask[:, :, :, 0] == 1.0).astype(np.float32),
+                np.logical_or(mask[:, :, :, 3] == 1.0, mask[:, :, :, 4] == 1.0).astype(np.float32)), axis=3).shape)
+
     def define_tf_shape(self, img, mask):
-        """Define the shape of tensors cause of separation from tensorflow graph build by using tf.numpy_function"""
+        """Define the shape of tensors cause of separation from tensorflow graph build by using tf.numpy_function
+
+        Parameter:
+        img: image tensor
+        mask: related mask tensor
+        """
         img.set_shape([self.patch_width, self.patch_height, len(self.bands)])
         mask.set_shape([self.patch_width, self.patch_height, self.num_cls])
         return img, mask
 
-    def cloud_amount(self):
-        """ Calculate the portion of clouds in the dataset rounded to two digits after the comma."""
-        _, counts = np.unique(self.train_masks, return_counts=True)
-        cloud_rate = counts[1] / sum(counts)
-        cloud_rate = round(cloud_rate * 10000) / 100
-        print('The percentage of cloud pixels is ' + str(cloud_rate) + '%')
+    def get_kfold_set(self, k_cross, cross_idx):
+        """Create the k-th fold from dataset
 
+        Parameter:
+        k_cross: Number of dataset folds
+        cross_idx: k-th cross index"""
+        num_samples = int(self.dataset.__len__())
+        fold_size = num_samples // k_cross
+        train_ds = self.dataset.take(cross_idx * fold_size)
+        train_ds = train_ds.concatenate(self.dataset.skip((cross_idx + 1) * fold_size).take((k_cross - (cross_idx + 1)) * fold_size))
+        val_ds = self.dataset.skip(cross_idx * fold_size).take(1 * fold_size)
+
+        #val_set = indices[i * fold_size: (i + 1) * fold_size]
+        #train_set = np.concatenate(indices[:i * fold_size], indices[(i + 1) * fold_size:])
+        return (train_ds, val_ds)
 
 if __name__ == '__main__':
-    BANDS = [3, 2, 1, 11]
-    dataset = Dataset('biome', BANDS, 2, 256, 256, 'D:/Clouds/data/LandSat8/Biome_Small')
-    dataset.create_dataset()
-    print(str(int(dataset.dataset.__len__())) + " samples in the dataset")
-
-    import numpy as np
-    import matplotlib.pyplot as plt
-    import tifffile as tiff
-
-    img = tiff.imread(
-        'E:/MA-Clouds/Praxis/cloudy_data/LandSat8/38-Cloud-Data/38-Cloud_training/train_gt/gt_patch_69_4_by_6_LC08_L1TP_032029_20160420_20170223_01_T1.tif')
-    img_array = np.array(img)
-    print(img_array.shape)
-    plt.imshow(img)
+    #BANDS = [3, 2, 1, 10]
+    #dataset = Dataset(BANDS, 2, 256, 256, 'D:/Clouds/data/Sentinel-3/Creodias')
+    #dataset.create_dataset()
+    #print(str(int(dataset.dataset.__len__())) + " samples in the dataset")
+    #path = 'D:/Clouds/data/Landsat8/Biome_256_Small_pp_md/test/Snow_Ice'
+    path = 'D:/Clouds/data/TUBIN/TUBIN_256_pp_md/train'
+    for campaign in os.listdir(path):
+        campaign_path = os.path.join(path, campaign)
+        products = [os.path.join(campaign_path, prod) for prod in os.listdir(campaign_path)]
+        for prod in products:
+            patches = [os.path.join(prod, patch) for patch in os.listdir(prod)]
+            for patch in patches:
+                img_path = os.path.join(patch, 'image.npy')
+                mask_path = os.path.join(patch, 'mask.npy')
+                img = np.load(img_path, allow_pickle=True)
+                mask = np.load(mask_path, allow_pickle=True)
+                #img_eq = img[:, :, :3] * 1.4
+                #print(img[:, :, :3].max(), img_eq.max())
+                # img_eq = exposure.equalize_hist(img[:, :, :3])
+                # img_eq = exposure.equalize_adapthist(img[:, :, :3], clip_limit=0.03)
+                #print(img_path)
+                print(img.shape)
+                plt.subplot(1, 2, 1)
+                plt.imshow(img[:, :, :3])
+                plt.subplot(1, 2, 2)
+                plt.imshow(mask)
+                plt.show()

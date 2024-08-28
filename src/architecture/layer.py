@@ -1,6 +1,6 @@
 import numpy as np
-from keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, Dropout, Cropping2D, BatchNormalization
-from keras.regularizers import l2
+from keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, Dropout, Cropping2D, BatchNormalization, LeakyReLU
+from keras.regularizers import l1, l2, l1_l2
 
 class Layers(object):
     """A class providing different types of network layers
@@ -24,32 +24,43 @@ class Layers(object):
         self.num_bands = num_bands
         self.num_cls = num_cls
 
-        # TODO: possible to have quadratic patches every time??
-        # --> search for other examples
         self.patch_height = params['patch_height']
         self.patch_width = params['patch_width']
 
         self.activation = params['activation']
         self.final_activation = 'softmax'
-        self.kernel_regularizer = l2(params['L2reg'])
+        self.kernel_regularizer = None #l1_l2(l1=params['L1reg'], l2=params['L2reg'])
         self.norm_momentum = params['batch_norm_momentum']
-        self.dropout = params['dropout']
+        self.dropout_rate = params['dropout_rate']
         self.dropout_on_last_layer_only = params['dropout_on_last_layer_only']
-        self.clip_pixels = clip_pixels = np.int32(params['overlap'] / 2)
 
     def input_layer(self):
         """Create the input layer of the network"""
         return Input((self.patch_width, self.patch_height, self.num_bands))
 
-    def conv2d_layer(self, num_filters, input):
+    def conv2d_layer(self, num_filters, input, name=''):
         """Create a 2D-convolution layer
 
         Parameter:
         num_filters: Number of output filters in the convolution
         input: Input Tensor from previous layer
         """
-        return Conv2D(num_filters, (3, 3), activation=self.activation, padding='same',
-                      kernel_initializer='he_uniform', kernel_regularizer=self.kernel_regularizer)(input)
+        if name != '':
+            if self.activation == 'leaky_relu':
+                conv_layer = Conv2D(num_filters, (3, 3), activation='linear', padding='same',
+                    kernel_initializer='he_uniform', kernel_regularizer=self.kernel_regularizer, name=name)(input)
+                return LeakyReLU(alpha=0.1, name='leaky_relu_' + name)(conv_layer)
+            else:
+                return Conv2D(num_filters, (3, 3), activation='relu', padding='same',
+                    kernel_initializer='he_uniform', kernel_regularizer=self.kernel_regularizer, name=name)(input)
+        else:
+            if self.activation == 'leaky_relu':
+                conv_layer = Conv2D(num_filters, (3, 3), activation='linear', padding='same',
+                    kernel_initializer='he_uniform', kernel_regularizer=self.kernel_regularizer)(input)
+                return LeakyReLU(alpha=0.1)(conv_layer)
+            else:
+                return Conv2D(num_filters, (3, 3), activation='relu', padding='same',
+                    kernel_initializer='he_uniform', kernel_regularizer=self.kernel_regularizer)(input)
 
     def batch_norm_layer(self, input):
         """Create a batch normalization layer to regularize the data
@@ -83,16 +94,7 @@ class Layers(object):
         Parameter:
         input: Input Tensor from previous layer
         """
-        return Dropout(self.dropout)(input) if not self.dropout_on_last_layer_only else input
-
-    def crop_layer(self, input):
-        """Create a cropping layer to shrink the data size
-
-        Parameter:
-        input: Input Tensor from previous layer
-        """
-        return Cropping2D(cropping=((self.clip_pixels, self.clip_pixels),
-                                    (self.clip_pixels, self.clip_pixels)))(input)
+        return Dropout(self.dropout_rate)(input) if not self.dropout_on_last_layer_only else input
 
     def fully_con_layer(self, input):
         """Create the final layer of the network
@@ -101,4 +103,4 @@ class Layers(object):
         input: Input Tensor from previous layer
         """
         return Conv2D(self.num_cls, (1, 1), activation=self.final_activation,
-                      kernel_initializer='glorot_uniform')(input)
+                      kernel_initializer='glorot_uniform', name='fully')(input)

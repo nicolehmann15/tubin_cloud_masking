@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import tensorflow as tf
 
 def show_patch(self, patch, color_map): #gray/binary
     """Show an image patch with matplotlib using gray/binary colormap
@@ -9,6 +10,7 @@ def show_patch(self, patch, color_map): #gray/binary
     """
     plt.imshow(patch, cmap=color_map)
     plt.show()
+
 
 def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
     """Call in a loop to create terminal progress bar
@@ -29,6 +31,7 @@ def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, 
     # Print New Line on Complete
     if iteration == total:
         print()
+
 
 if __name__ == '__main__':
     items = list(range(0, 64))

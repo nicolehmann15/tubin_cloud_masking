@@ -1,7 +1,13 @@
 tensorflow==2.10.1
 tensorflow-datasets==4.8.2
-tensorflow-metadata=1.12.0
+tensorflow-metadata==1.12.0
 numpy
 keras
 opencv-python
 matplotlib
+tifffile
+seaborn
+scikit-learn
+scikit-image
+scikeras
+spectral
