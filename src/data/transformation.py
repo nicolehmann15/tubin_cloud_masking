@@ -11,7 +11,7 @@ import shutil
 import os
 from PIL import Image
 
-ESRGAN_Path = 'C:/Users/n_leh/Desktop/Masterarbeit/Repos/ESRGAN'
+ESRGAN_Path = '/Repos/ESRGAN'
 SCALE_FACTOR = 256*256 - 1
 
 def augmentate(img, mask):

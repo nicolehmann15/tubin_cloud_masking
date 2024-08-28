@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import rasterio
 import tifffile as tiff
 
-CREODIAS_PATH = 'D:/Clouds/data/Sentinel-3/Creodias/original/'
+CREODIAS_PATH = '/Sentinel-3/Creodias/original/'
 SLSTR_SHAPE = (1500, 1200)
 SLSTR_FILL_VALUE = -32768
 S8_LOWER_BOUND = -11000

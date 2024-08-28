@@ -18,8 +18,8 @@ import numpy as np
 from segments import SegmentsClient, SegmentsDataset
 from segments.utils import export_dataset, get_semantic_bitmap, bitmap2file
 
-TUBIN_PATH = 'D:/Clouds/data/TUBIN/Preprocessing/buffer'
-GT_PATH = 'C:/Users/n_leh/Desktop/Masterarbeit/Praxis/labeling'
+TUBIN_PATH = '/TUBIN/Preprocessing/buffer'
+GT_PATH = '/labeling'
 
 
 def extract_vis_part():

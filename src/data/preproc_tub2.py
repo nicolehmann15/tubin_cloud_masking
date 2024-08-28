@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 
 TIR_SHAPE = (640, 512)
 VIS_SHAPE = (3664, 2748)
-TUBIN_PATH = 'D:/Clouds/data/TUBIN/UNet_Studentengruppe/tubin_data_U_Net/'
+TUBIN_PATH = '/tubin_data_U_Net/'
 
 def process_dataset():
     images_path = os.path.join(TUBIN_PATH, 'train_images')

@@ -13,8 +13,8 @@ import rasterio
 import utm
 import matplotlib.pyplot as plt
 
-CAMPAIGN_PATH = 'D:/Clouds/data/TUBIN/Preprocessing/buffer/230828_Detroit'
-TUBIN_PATH = 'D:/Clouds/data/TUBIN/Preprocessing/buffer/'
+CAMPAIGN_PATH = '/TUBIN/Preprocessing/buffer/230828_Detroit'
+TUBIN_PATH = '/TUBIN/Preprocessing/buffer/'
 BW_PNG = '01_bw_png'
 DEB_FF = '06_deb_ff'
 TEMP = '08_temp'
@@ -23,8 +23,8 @@ REGISTERED = 'Registered'
 SCALE_FACTOR = 256 - 1
 TIR_SHAPE = (640, 512)
 VIS_SHAPE = (3664, 2748)
-cloudy_data_path = 'C:/Users/n_leh/Desktop/Masterarbeit/Praxis/labeling/synthetic/cloudy'
-clear_data_path = 'C:/Users/n_leh/Desktop/Masterarbeit/Praxis/labeling/synthetic/clear'
+cloudy_data_path = /labeling/synthetic/cloudy'
+clear_data_path = '/labeling/synthetic/clear'
 
 
 def process_dataset(product):
@@ -373,7 +373,7 @@ def register_vistir(path):
             os.mkdir(registered_path)
         for vis_prod in [prod for prod in os.listdir(vis_path) if prod.endswith('.png')]:
             vis_img_path = os.path.join(vis_path, vis_prod)
-            subprocess.call(["python", "C:/Users/n_leh/Desktop/Masterarbeit/Tools/Registration/TUBIN-image-registration/vistir_stitcher.py",
+            subprocess.call(["python", "/TUBIN-image-registration/vistir_stitcher.py",
                              "-v", vis_img_path,
                              "-t", tir_path,
                              "-o", registered_path])
