@@ -275,11 +275,11 @@ class Dataset(object):
 
 if __name__ == '__main__':
     #BANDS = [3, 2, 1, 10]
-    #dataset = Dataset(BANDS, 2, 256, 256, 'D:/Clouds/data/Sentinel-3/Creodias')
+    #dataset = Dataset(BANDS, 2, 256, 256, '/Sentinel-3/Creodias')
     #dataset.create_dataset()
     #print(str(int(dataset.dataset.__len__())) + " samples in the dataset")
-    #path = 'D:/Clouds/data/Landsat8/Biome_256_Small_pp_md/test/Snow_Ice'
-    path = 'D:/Clouds/data/TUBIN/TUBIN_256_pp_md/train'
+    #path = '/Biome_256_Small_pp_md/test/Snow_Ice'
+    path = '/TUBIN_256_pp_md/train'
     for campaign in os.listdir(path):
         campaign_path = os.path.join(path, campaign)
         products = [os.path.join(campaign_path, prod) for prod in os.listdir(campaign_path)]
